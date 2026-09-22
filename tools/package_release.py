@@ -22,7 +22,7 @@ def main():
         dest = target / f'ebbinghaus-vocabulary{variant}-v{VERSION}.zip'
         contents = dict(files)
         if workbuddy:
-            text = contents['SKILL.md'].decode('utf-8')
+            text = contents['SKILL.md'].decode('utf-8').replace('\r\n', '\n')
             header, body = text.removeprefix('---\n').split('\n---\n', 1)
             metadata = {
                 'display_name': '艾宾浩斯式单词复习',
