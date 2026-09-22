@@ -1,0 +1,4 @@
+interface:
+  display_name: "艾宾浩斯式单词复习"
+  short_description: "上传单词材料，按每天5或10词生成可打印Excel总表与汉译英复习册"
+  default_prompt: "使用 $ebbinghaus-vocabulary 整理我上传的单词材料，列出每天新增5词和10词的周期与每日峰值，等我选定方案后生成打印材料，日期留空。"
