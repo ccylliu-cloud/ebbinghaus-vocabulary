@@ -16,13 +16,19 @@
 
 已有明确方案时可以直接说“每天新增5词”。识别不清或缺少中英文的内容需要核对，不能猜词。AI 整理后由本地程序生成文件。
 
-**[下载通用 Skill 包](dist/ebbinghaus-vocabulary-v1.0.0.zip) · [下载 WorkBuddy 包](dist/ebbinghaus-vocabulary-workbuddy-v1.0.0.zip) · [浏览样例](examples/README.md)**
+**[下载通用 Skill 包](dist/ebbinghaus-vocabulary-v1.0.1.zip) · [下载 WorkBuddy 包](dist/ebbinghaus-vocabulary-workbuddy-v1.0.1.zip) · [浏览样例](examples/README.md)**
 
 WorkBuddy 用户可下载专用包，交给 WorkBuddy：
 
 > 请把附件安装为本地技能，检查运行依赖。之后用它把我上传的词表做成可打印的复习材料。
 
 专用包在 ZIP 根目录提供 `SKILL.md`，按[官方技能结构](https://open.workbuddy.cn/docs/skill)补充中英文简介、版本和作者信息。它与通用版共用生成代码；尚未完成 WorkBuddy 客户端实机验收，也未上架其技能市场。若当前客户端不接受 ZIP，让它解压到自己的技能目录并读取 `SKILL.md`。
+
+## v1.0.1 更新
+
+修复教材长释义在总表中换行后显示不全、不同导出方式列宽不一致的问题。中文、英文、音标、词性标题与正文统一左对齐。练习册的长释义使用整列宽度，默写线放在下方，保留原书的完整用法说明。
+
+新增长文本与办公软件实际打印回归检查；原有分组、复习周期和自适应字段规则保持不变。
 
 ## 你会得到什么
 
@@ -92,6 +98,6 @@ python tools/package_release.py
 
 自动测试覆盖复习次数、实际峰值、5/10词分组、2/3/4字段、整组分页、多天共页、单天多列、空日期、答案不泄露到练习册，以及独立 Python 导出。GitHub Actions 配置在 Linux、Windows、macOS 上执行测试；测试状态以仓库 Actions 实际结果为准。
 
-已在开发机器上检查 Excel 的办公软件打印渲染与 PDF 样例。通用 Skill 的会话规则和各宿主的安装入口仍可能受宿主版本影响；遇到问题可提交 [Issue](https://github.com/ccylliu-cloud/ebbinghaus-vocabulary/issues)，附匿名小词表、操作系统和错误提示即可。
+v1.0.1 已通过15项常规测试，并在开发机器上用 LibreOffice 检查两种导出引擎、5/10词方案及混合字段多页打印；实际 Excel/WPS 客户端及实体打印尚未复测。通用 Skill 的会话规则和各宿主的安装入口仍可能受宿主版本影响；遇到问题可提交 [Issue](https://github.com/ccylliu-cloud/ebbinghaus-vocabulary/issues)，附匿名小词表、操作系统和错误提示即可。
 
 代码与文档采用 [MIT License](LICENSE)。实打印照片仅供本项目效果展示，版权归照片提供者；不随 MIT 软件许可授予独立商用授权。仓库不包含用户私有词表、密钥或系统字体文件。AI 读取上传材料时遵循所使用平台的数据处理规则。
