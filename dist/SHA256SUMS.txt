@@ -1,2 +1,2 @@
-3e37bacb412411d355ace993acfbd9332d144a18b7bfefdbd2b5101edb009517  ebbinghaus-vocabulary-v1.0.0.zip
-f6ed898171797cf298f4356bddcf7865be268e97dc4acccd323322ffbe2019b4  ebbinghaus-vocabulary-workbuddy-v1.0.0.zip
+6902df3b559bb10a9ae23334b1d08b4035dbeb6c9608d4827d3e61d21984a85a  ebbinghaus-vocabulary-v1.0.1.zip
+f7cf1c8af6f3684bc19185244b0f1d4e1a58771e4e0de3961744cbf29517588f  ebbinghaus-vocabulary-workbuddy-v1.0.1.zip
