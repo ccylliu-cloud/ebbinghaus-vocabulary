@@ -3,6 +3,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish v1.0.1 after tests pass'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -24,3 +29,45 @@ jobs:
       - run: python -m pip install -r skills/ebbinghaus-vocabulary/requirements.txt
       - run: python skills/ebbinghaus-vocabulary/scripts/test_vocab.py
       - run: python tools/package_release.py
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VOCAB_XLSX_ENGINE: xlsxwriter
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r skills/ebbinghaus-vocabulary/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y fonts-arphic-ukai
+      - name: Refuse replacing a published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.0.1 >/dev/null 2>&1; then
+            echo 'v1.0.1 already exists.'
+            exit 1
+          fi
+      - run: python tools/build_examples.py
+      - run: python tools/package_release.py
+      - name: Commit generated downloads and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist examples
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh v1.0.1 install packages and public examples'
+            git push origin HEAD:main
+          fi
+          if gh release view v1.0.1 >/dev/null 2>&1; then
+            echo 'v1.0.1 already exists; refusing to replace a published release.'
+            exit 1
+          fi
+          gh release create v1.0.1 dist/ebbinghaus-vocabulary-v1.0.1.zip dist/ebbinghaus-vocabulary-workbuddy-v1.0.1.zip dist/SHA256SUMS.txt --target "$(git rev-parse HEAD)" --title 'v1.0.1 · 长释义排版修复' --notes-file docs/release-v1.0.1.md
