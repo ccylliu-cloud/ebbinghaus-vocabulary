@@ -6,7 +6,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'skills' / 'ebbinghaus-vocabulary'
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
         with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as archive:
             for name, data in sorted(contents.items()):
                 prefix = '' if workbuddy else 'ebbinghaus-vocabulary/'
-                item = zipfile.ZipInfo(prefix + name, (2026, 9, 22, 0, 0, 0))
+                item = zipfile.ZipInfo(prefix + name, (2026, 9, 26, 0, 0, 0))
                 item.compress_type = zipfile.ZIP_DEFLATED
                 item.external_attr = (0o100755 if name.endswith('.sh') else 0o100644) << 16
                 archive.writestr(item, data)
