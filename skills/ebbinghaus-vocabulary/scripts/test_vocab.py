@@ -98,6 +98,60 @@ class VocabularyTests(unittest.TestCase):
         self.assertEqual(len(peak_pages),1)
         self.assertEqual([c['day'] for c in peak_pages[0]],[30,30,30,30])
 
+    def test_long_prompt_uses_full_width_and_keeps_meaning(self):
+        meaning = '（用于书信开头，向收信人表达礼貌及亲近关系）亲爱的朋友'
+        data = [{'english': 'dear friend', 'chinese': meaning}]
+        block = v.task_layout({'group': 1, 'visit': 1, 'words': data})
+        row = block['rows'][0]
+        self.assertTrue(row['stacked'])
+        self.assertEqual(''.join(row['lines']), meaning)
+        self.assertGreaterEqual(row['height'] - len(row['lines']) * 12, 24)
+        short = v.task_layout({'group': 1, 'visit': 1, 'words': words(1)})
+        self.assertFalse(short['rows'][0]['stacked'])
+
+    def test_word_wrap_punctuation_and_measured_width(self):
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+        lines = v.wrap('the Dragon Boat Festival', 70, 9)
+        self.assertEqual(' '.join(lines), 'the Dragon Boat Festival')
+        self.assertTrue(all(line == line.strip() for line in lines))
+        source = '（用于书信开头，向收信人表示礼貌）亲爱的朋友；伙伴。'
+        for width in (40, 55, 80, 100):
+            lines = v.wrap(source, width, 9)
+            self.assertEqual(''.join(lines), source)
+            for line in lines:
+                self.assertLessEqual(stringWidth(line, v.font_name(), 9), width)
+                self.assertNotIn(line[0], '，。；）')
+                self.assertNotEqual(line[-1], '（')
+
+    def test_canonical_excel_columns_and_long_row_heights(self):
+        data = words(40)
+        for i, word in enumerate(data):
+            word['chinese'] = '（用于书信开头，向收信人表达礼貌及亲近关系）亲爱的朋友'
+            if i < 10: word.pop('ipa'); word.pop('pos')
+            elif i < 20: word.pop('ipa')
+            elif i < 30: word.pop('pos')
+        for daily in (5, 10):
+            layout = v.master_layout(v.schedule(data, daily)['groups'])
+            grid = v.master_grid(layout)
+            for page in layout:
+                for block in page:
+                    for row in block['rows']:
+                        lines = max(len(value.split('\n')) for value in row['values'])
+                        self.assertGreaterEqual(row['units'] * 6, lines * 12 + 8)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / 'master.xlsx'
+                v.xlsx_fallback(layout, path)
+                v.patch_print_settings(path, len(layout), grid)
+                ns = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                with zipfile.ZipFile(path) as z:
+                    sh = ET.fromstring(z.read('xl/worksheets/sheet1.xml'))
+                    styles = ET.fromstring(z.read('xl/styles.xml'))
+                columns = sh.find('m:cols', ns)
+                self.assertEqual(len(columns), len(grid['widths']))
+                self.assertLess(sum(float(c.get('width')) * 7 * .75 for c in columns), 510)
+                self.assertEqual(sh.find('m:rowBreaks', ns).get('count'), str(len(layout) - 1))
+                self.assertTrue(all(a.get('wrapText') == '1' for a in styles.findall('.//m:alignment', ns)))
+
     def test_input_validation_and_dedup(self):
         w=words(1)[0]
         result,info=v.normalize([w,w,{**w,'chinese':'另一释义'}])

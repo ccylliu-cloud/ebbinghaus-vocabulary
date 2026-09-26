@@ -26,7 +26,7 @@ function merged(row, col, height, width, value, kind) {
   if (kind === 'header') {
     range.format.fill = '#F4F4F4';
     range.format.font.bold = true;
-    range.format.horizontalAlignment = 'center';
+    range.format.horizontalAlignment = 'left';
   }
   if (kind === 'body') range.format.borders = {bottom:{style:'thin',color:'#DDDDDD'}};
 }

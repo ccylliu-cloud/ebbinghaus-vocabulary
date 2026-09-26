@@ -37,11 +37,12 @@ CONTENT_W = COL_W - 2 * COL_PAD
 CN_W = 60
 BODY_H = PDF_H - 2 * MARGIN - 42
 MASTER_SCHEMAS = {
-    ('ipa', 'pos'): (['chinese', 'english', 'ipa', 'pos'], [68, 78, 91, 27]),
-    ('ipa',): (['chinese', 'english', 'ipa'], [66, 96, 102]),
-    ('pos',): (['chinese', 'english', 'pos'], [94, 140, 30]),
+    ('ipa', 'pos'): (['chinese', 'english', 'ipa', 'pos'], [100, 65, 75, 24]),
+    ('ipa',): (['chinese', 'english', 'ipa'], [112, 72, 80]),
+    ('pos',): (['chinese', 'english', 'pos'], [120, 114, 30]),
     (): (['chinese', 'english', 'chinese', 'english'], [55, 77, 55, 77]),
 }
+MASTER_COLUMN_SCALE = .93  # Reserve width for office font substitution at print time.
 MASTER_ROWS = 126
 MASTER_START = 5
 FONT_NAME = None
@@ -69,18 +70,39 @@ def font_name():
 
 
 def wrap(text, width, size):
-    """Measure every character, retaining all text including explicit line breaks."""
+    """Measured wrapping with word boundaries and Chinese punctuation handling.
+
+    Only whitespace at a newly introduced line boundary is discarded. Original
+    text remains in the input records; no meaning is shortened for printing.
+    """
     from reportlab.pdfbase.pdfmetrics import stringWidth
+    if width <= 0:
+        raise ValueError('换行宽度必须大于零。')
+    closing = set('，。；：！？、）》】」』〕〉,.!?;:)]}')
+    opening = set('（《【「『〔〈([{')
     lines = []
+    measure = lambda value: stringWidth(value, font_name(), size)
     for paragraph in str(text).split('\n'):
-        line = ''
-        for char in paragraph:
-            if line and stringWidth(line + char, font_name(), size) > width:
-                lines.append(line)
-                line = char
-            else:
-                line += char
-        lines.append(line)
+        remaining = paragraph.strip()
+        if not remaining:
+            lines.append('')
+        while remaining:
+            end = 0
+            while end < len(remaining) and measure(remaining[:end + 1]) <= width:
+                end += 1
+            if end == 0:
+                raise ValueError('单个字符超出可打印宽度。')
+            if end < len(remaining):
+                # Prefer a space boundary when a Latin word would be broken.
+                if remaining[end - 1].isascii() and remaining[end - 1].isalnum() and remaining[end].isascii() and remaining[end].isalnum():
+                    space = remaining.rfind(' ', 0, end)
+                    if space > 0:
+                        end = space
+                # Move characters to the next line, never grow beyond width.
+                while end > 1 and (remaining[end] in closing or remaining[end - 1] in opening):
+                    end -= 1
+            lines.append(remaining[:end].rstrip())
+            remaining = remaining[end:].lstrip()
     return lines or ['']
 
 
@@ -185,7 +207,11 @@ def task_layout(task, size=10, row_min=22):
     rows = []
     for word in task['words']:
         lines = wrap(word['chinese'], CN_W - 5, size)
-        rows.append({'lines': lines, 'height': max(row_min, len(lines) * (size + 2) + 6)})
+        stacked = len(lines) > 2
+        if stacked:
+            lines = wrap(word['chinese'], CONTENT_W - 8, size)
+        height = len(lines) * (size + 2) + (24 if stacked else 6)
+        rows.append({'lines': lines, 'stacked': stacked, 'height': max(row_min, height)})
     return {**task, 'rows': rows, 'height': 20 + sum(r['height'] for r in rows) + 8,
             'font_size': size}
 
@@ -243,8 +269,8 @@ def master_layout(groups):
             else:
                 values = [group['words'][indexes[0]].get(k, '') for k in fields]
             # A little width reserve for Excel's different font metrics.
-            lines = [wrap(value, width - 10, 9) for value, width in zip(values, widths)]
-            units = max(3, math.ceil((max(map(len, lines)) * 11 + 6) / 6))
+            lines = [wrap(value, (width - 12) * .94, 9) for value, width in zip(values, widths)]
+            units = max(3, math.ceil((max(map(len, lines)) * 12 + 8) / 6))
             rows.append({'values': ['\n'.join(s) for s in lines], 'units': units,
                          'word_indexes': list(indexes)})
         units = 6 + sum(r['units'] for r in rows) + 1
@@ -342,12 +368,14 @@ def render_pdf(pages, path):
                 for row in block['rows']:
                     size = block['font_size']
                     line_height = size + 2
-                    baseline = y - (row['height'] - len(row['lines']) * line_height) / 2 - size
+                    baseline = (y - size - 3 if row['stacked'] else
+                                y - (row['height'] - len(row['lines']) * line_height) / 2 - size)
                     for j, line in enumerate(row['lines']):
                         c.drawString(x + 2, baseline - j * line_height, line)
                     c.setStrokeColorRGB(.40, .40, .40)
                     c.setLineWidth(.45)
-                    c.line(x + CN_W + 3, y - row['height'] + 5, x + CONTENT_W - 2, y - row['height'] + 5)
+                    line_start = x + 2 if row['stacked'] else x + CN_W + 3
+                    c.line(line_start, y - row['height'] + 5, x + CONTENT_W - 2, y - row['height'] + 5)
                     y -= row['height']
                 y -= 8
             if y < MARGIN - .01:
@@ -356,7 +384,7 @@ def render_pdf(pages, path):
     c.save()
 
 
-def patch_print_settings(path, page_count, last_column='I'):
+def patch_print_settings(path, page_count, grid):
     """Add missing native print features after artifact-tool XLSX export."""
     ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
     ET.register_namespace('', ns)
@@ -364,6 +392,36 @@ def patch_print_settings(path, page_count, last_column='I'):
     with zipfile.ZipFile(path) as z:
         files = {n: z.read(n) for n in z.namelist()}
     sheet = ET.fromstring(files['xl/worksheets/sheet1.xml'])
+    # Excel column units depend on the Normal style's maximum digit width.
+    # Use Arial 10 (7 pixels at 96 dpi) and identical final widths for both
+    # exporters. Their own pixel-to-column conversions are not interchangeable.
+    styles = ET.fromstring(files['xl/styles.xml'])
+    fonts = styles.find(q('fonts'))
+    normal_font = ET.SubElement(fonts, q('font'))
+    ET.SubElement(normal_font, q('sz'), {'val': '10'})
+    ET.SubElement(normal_font, q('name'), {'val': 'Arial'})
+    fonts.set('count', str(len(fonts)))
+    for xf in styles.find(q('cellStyleXfs')):
+        xf.set('fontId', str(len(fonts) - 1))
+    # Keep explicit newlines visible in both shared-string and inline-string
+    # cells. Conservative measured widths prevent unexpected second wrapping.
+    for alignment in styles.iter(q('alignment')):
+        alignment.set('wrapText', '1')
+    files['xl/styles.xml'] = ET.tostring(styles, encoding='utf-8', xml_declaration=True)
+    old_cols = sheet.find(q('cols'))
+    if old_cols is not None:
+        sheet.remove(old_cols)
+    cols = ET.Element(q('cols'))
+    sheet.insert(list(sheet).index(sheet.find(q('sheetData'))), cols)
+    for index, points in enumerate(grid['widths'], 1):
+        # Round cumulative pixel edges so a mixed-schema fine grid does not
+        # accumulate rounding errors across many narrow physical columns.
+        start = round(sum(grid['widths'][:index - 1]) * MASTER_COLUMN_SCALE * 96 / 72)
+        end = round(sum(grid['widths'][:index]) * MASTER_COLUMN_SCALE * 96 / 72)
+        width = math.floor((end - start) / 7 * 256) / 256
+        ET.SubElement(cols, q('col'), {'min': str(index), 'max': str(index),
+                                    'width': str(width), 'customWidth': '1'})
+    last_column = grid['last_column']
     for name in ('sheetPr', 'printOptions', 'pageMargins', 'pageSetup', 'headerFooter', 'rowBreaks', 'colBreaks'):
         for elem in sheet.findall(q(name)):
             sheet.remove(elem)
@@ -402,7 +460,7 @@ def xlsx_fallback(layout, path):
     sh.hide_gridlines(2)
     base = {'font_name': 'Arial Unicode MS', 'font_size': 9, 'valign': 'vcenter', 'text_wrap': True}
     normal = wb.add_format({**base, 'bottom': 1, 'bottom_color': '#DDDDDD'})
-    header = wb.add_format({**base, 'bold': True, 'bg_color': '#F4F4F4', 'align': 'center'})
+    header = wb.add_format({**base, 'bold': True, 'bg_color': '#F4F4F4', 'align': 'left'})
     groupfmt = wb.add_format({**base, 'bold': True, 'bg_color': '#E4E4E4'})
     titlefmt = wb.add_format({**base, 'bold': True, 'font_size': 12})
     for col, width in enumerate(grid['widths']):
@@ -463,7 +521,7 @@ def render_xlsx(layout, path, work):
     else:
         xlsx_fallback(layout, path)
         engine = 'xlsxwriter'
-    patch_print_settings(path, len(layout), grid['last_column'])
+    patch_print_settings(path, len(layout), grid)
     return engine
 
 
